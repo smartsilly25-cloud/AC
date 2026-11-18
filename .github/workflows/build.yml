@@ -1,0 +1,41 @@
+name: Build Audio Cutter Merger
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ekstrak ZIP langsung di runner
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path . -Filter *.zip | Select-Object -First 1
+          if (-not $zip) { throw "File .zip tidak ditemukan di root repo" }
+          Expand-Archive -Path $zip.FullName -DestinationPath src -Force
+          $app = Get-ChildItem -Path src -Recurse -Filter app.py | Select-Object -First 1
+          "SRC_DIR=$($app.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install dependensi
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build exe
+        working-directory: ${{ env.SRC_DIR }}
+        run: pyinstaller --onefile --windowed --name AudioCutterMerger --collect-all imageio_ffmpeg app.py
+
+      - name: Upload hasil build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioCutterMerger-Windows
+          path: ${{ env.SRC_DIR }}/dist/AudioCutterMerger.exe
